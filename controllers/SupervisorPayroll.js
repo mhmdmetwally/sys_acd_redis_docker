@@ -1,5 +1,7 @@
+const mongoose = require('mongoose');
 const AsyncWrapper = require('../middleware/AsyncWrapper');
 const SupervisorPayroll = require('../models/SupervisorPayroll');
+const Academy = require('../models/Academy');
 const Expense = require('../models/Expense');
 const Supervisor = require('../models/Supervisor');
 const User = require('../models/User');
@@ -334,10 +336,15 @@ const calculateSupervisorPayroll = AsyncWrapper(
         // Create Payroll
         // =====================================================
 
+        const academy = await Academy.findById(academy_id).select('currency');
+        const currency = academy?.currency || process.env.DEFAULT_CURRENCY || 'EGP';
+
         const payroll =
             await SupervisorPayroll.create({
 
                 academy_id,
+
+            currency,
 
                 supervisor:
                     supervisor_id,
@@ -473,43 +480,54 @@ const addDeductionToSupervisorPayroll = AsyncWrapper(async (req, res, next) => {
 const markPayrollAsPaid = AsyncWrapper(async (req, res, next) => {
     const academy_id = getAcademyId(req);
     const { payroll_id } = req.params;
+    const session = await mongoose.startSession();
+    let payroll;
 
-    const payroll = await SupervisorPayroll.findOne({ _id: payroll_id, academy_id })
-        .populate('supervisor', 'name');
+    try {
+        await session.withTransaction(async () => {
+            payroll = await SupervisorPayroll.findOne({ _id: payroll_id, academy_id })
+                .session(session)
+                .populate('supervisor', 'name');
 
-    if (!payroll) {
-        const error = new app_error();
-        error.create('Supervisor payroll record not found', 404, http_status_text.FAIL);
-        return next(error);
+            if (!payroll) {
+                const error = new app_error();
+                error.create('Supervisor payroll record not found', 404, http_status_text.FAIL);
+                throw error;
+            }
+
+            if (payroll.status === 'paid') {
+                const error = new app_error();
+                error.create('Payroll is already marked as paid', 400, http_status_text.FAIL);
+                throw error;
+            }
+
+            payroll.status = 'paid';
+            payroll.payment_date = new Date();
+            await payroll.save({ session });
+
+            const supervisorName = payroll.supervisor?.name || 'Supervisor';
+            await Expense.create([{
+                academy_id,
+                category: 'Salaries',
+                title: `Supervisor Salary - ${supervisorName} (${payroll.billing_month})`,
+                amount: payroll.net_salary,
+                currency: payroll.currency,
+                base_amount: payroll.net_salary,
+                base_currency: payroll.currency,
+                exchange_rate: 1,
+                expense_date: payroll.payment_date,
+                payment_method: 'cash',
+                notes: `Automated expense generated from supervisor payroll ID: ${payroll._id}`
+            }], { session });
+        });
+
+        return res.status(200).json({
+            status: http_status_text.SUCCESS,
+            data: { payroll }
+        });
+    } finally {
+        await session.endSession();
     }
-
-    if (payroll.status === 'paid') {
-        const error = new app_error();
-        error.create('Payroll is already marked as paid', 400, http_status_text.FAIL);
-        return next(error);
-    }
-
-    // 1. تحديث حالة المرتب وتاريخ الدفع
-    payroll.status = 'paid';
-    payroll.payment_date = new Date();
-    await payroll.save();
-
-    // 2. إنشاء سجل المصروف تلقائياً ليتكامل مع التقارير المالية
-    const supervisorName = payroll.supervisor?.name || 'Supervisor';
-    await Expense.create({
-        academy_id,
-        category: 'Salaries',
-        title: `Supervisor Salary - ${supervisorName} (${payroll.billing_month})`,
-        amount: payroll.net_salary,
-        expense_date: payroll.payment_date,
-        payment_method: 'cash',
-        notes: `Automated expense generated from supervisor payroll ID: ${payroll._id}`
-    });
-
-    return res.status(200).json({
-        status: http_status_text.SUCCESS,
-        data: { payroll }
-    });
 });
 
 // =====================================================

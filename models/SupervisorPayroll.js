@@ -40,6 +40,13 @@ const SupervisorPayrollSchema = new mongoose.Schema(
             required: true
         },
 
+        currency: {
+            type: String,
+            uppercase: true,
+            match: /^[A-Z]{3}$/,
+            default: process.env.DEFAULT_CURRENCY || 'EGP'
+        },
+
         supervisor: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Supervisor',

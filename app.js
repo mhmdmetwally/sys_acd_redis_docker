@@ -1,4 +1,6 @@
 
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -328,6 +330,13 @@ app.use((err, req, res, next) => {
 
 });
 
+
+if (require.main === module) {
+    const port = Number(process.env.PORT) || 3000;
+    app.listen(port, () => {
+        console.log(`API listening on port ${port}`);
+    });
+}
 
 module.exports = app;
 

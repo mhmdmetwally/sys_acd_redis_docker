@@ -62,6 +62,31 @@ const ExpenseSchema = new mongoose.Schema(
             min: 0
         },
 
+        currency: {
+            type: String,
+            uppercase: true,
+            match: /^[A-Z]{3}$/,
+            default: process.env.DEFAULT_CURRENCY || 'EGP'
+        },
+
+        base_amount: {
+            type: Number,
+            min: 0
+        },
+
+        base_currency: {
+            type: String,
+            uppercase: true,
+            match: /^[A-Z]{3}$/,
+            default: process.env.DEFAULT_CURRENCY || 'EGP'
+        },
+
+        exchange_rate: {
+            type: Number,
+            min: 0,
+            default: 1
+        },
+
         // =========================================
         // Expense Date
         // =========================================

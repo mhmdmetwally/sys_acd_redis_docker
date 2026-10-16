@@ -36,6 +36,12 @@ const AcademySchema = new mongoose.Schema(
             unique: true,
             trim: true
         },
+        currency: {
+            type: String,
+            uppercase: true,
+            match: /^[A-Z]{3}$/,
+            default: process.env.DEFAULT_CURRENCY || 'EGP'
+        },
         password: {
             type: String,
             required: true,

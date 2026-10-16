@@ -119,6 +119,13 @@ const TeacherPayrollSchema = new mongoose.Schema(
             index: true
         },
 
+        currency: {
+            type: String,
+            uppercase: true,
+            match: /^[A-Z]{3}$/,
+            default: process.env.DEFAULT_CURRENCY || 'EGP'
+        },
+
         teacher_assignment: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'TeacherAssignment',

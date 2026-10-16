@@ -7,6 +7,9 @@ const AsyncWrapper =
 const Payment =
     require('../models/Payment');
 
+const Academy =
+    require('../models/Academy');
+
 const PaymentAllocation =
     require('../models/PaymentAllocation');
 
@@ -28,6 +31,11 @@ const {
     isValidBillingMonth
 } =
     require('../utils/Billing');
+
+const {
+    normalizeCurrency,
+    getExchangeRate
+} = require('../utils/Currency');
 
 
 // =====================================================
@@ -291,11 +299,17 @@ const createPayment =
                         const academy_id =
                             getAcademyId(req);
 
+                        const academy = await Academy.findById(academy_id)
+                            .select('currency')
+                            .session(session);
+                        const baseCurrency = normalizeCurrency(academy?.currency);
+
 
                         const {
                             family,
                             invoice,
                             amount,
+                            currency,
                             type,
                             method,
                             payment_date,
@@ -343,7 +357,7 @@ const createPayment =
 
 
                         if (
-                            Number.isNaN(
+                            !Number.isFinite(
                                 paymentAmount
                             ) ||
                             paymentAmount <= 0
@@ -442,6 +456,26 @@ const createPayment =
 
                             }
 
+                            const paymentCurrency = normalizeCurrency(
+                                currency,
+                                invoiceDoc.currency || baseCurrency
+                            );
+                            const invoiceCurrency = normalizeCurrency(
+                                invoiceDoc.currency,
+                                baseCurrency
+                            );
+                            const exchangeRate = await getExchangeRate(
+                                paymentCurrency,
+                                baseCurrency
+                            );
+                            const invoiceExchangeRate = await getExchangeRate(
+                                paymentCurrency,
+                                invoiceCurrency
+                            );
+                            const invoiceAmount = roundMoney(
+                                paymentAmount * invoiceExchangeRate
+                            );
+
 
                             const remaining =
                                 Number(
@@ -450,7 +484,7 @@ const createPayment =
 
 
                             if (
-                                paymentAmount >
+                                invoiceAmount >
                                 remaining
                             ) {
 
@@ -478,6 +512,18 @@ const createPayment =
 
                                     amount:
                                         paymentAmount,
+
+                                    currency:
+                                        paymentCurrency,
+
+                                    base_amount:
+                                        roundMoney(paymentAmount * exchangeRate),
+
+                                    base_currency:
+                                        baseCurrency,
+
+                                    exchange_rate:
+                                        exchangeRate,
 
                                     remaining_amount:
                                         0,
@@ -519,7 +565,13 @@ const createPayment =
                                         invoiceDoc._id,
 
                                     amount:
-                                        paymentAmount
+                                        invoiceAmount,
+
+                                    currency:
+                                        invoiceCurrency,
+
+                                    exchange_rate:
+                                        invoiceExchangeRate
 
                                 });
 
@@ -538,7 +590,7 @@ const createPayment =
                                     Number(
                                         invoiceDoc.paid_amount
                                     ) +
-                                    paymentAmount
+                                    invoiceAmount
                                 );
 
 
@@ -581,6 +633,15 @@ const createPayment =
 
                             }
 
+                            const paymentCurrency = normalizeCurrency(
+                                currency,
+                                baseCurrency
+                            );
+                            const exchangeRate = await getExchangeRate(
+                                paymentCurrency,
+                                baseCurrency
+                            );
+
 
                             const payment =
                                 new Payment({
@@ -594,6 +655,18 @@ const createPayment =
 
                                     amount:
                                         paymentAmount,
+
+                                    currency:
+                                        paymentCurrency,
+
+                                    base_amount:
+                                        roundMoney(paymentAmount * exchangeRate),
+
+                                    base_currency:
+                                        baseCurrency,
+
+                                    exchange_rate:
+                                        exchangeRate,
 
                                     remaining_amount:
                                         paymentAmount,
@@ -1190,7 +1263,7 @@ const allocateAdvancePayment =
 
 
                         if (
-                            Number.isNaN(
+                            !Number.isFinite(
                                 allocationAmount
                             ) ||
                             allocationAmount <= 0
@@ -1296,13 +1369,29 @@ const allocateAdvancePayment =
 
                         }
 
+                        const paymentCurrency = normalizeCurrency(
+                            payment.currency,
+                            payment.base_currency
+                        );
+                        const invoiceCurrency = normalizeCurrency(
+                            invoiceDoc.currency,
+                            payment.base_currency
+                        );
+                        const invoiceExchangeRate = await getExchangeRate(
+                            paymentCurrency,
+                            invoiceCurrency
+                        );
+                        const invoiceAllocationAmount = roundMoney(
+                            allocationAmount * invoiceExchangeRate
+                        );
+
 
                         // =========================================
                         // Invoice Balance
                         // =========================================
 
                         if (
-                            allocationAmount >
+                            invoiceAllocationAmount >
                             invoiceDoc.remaining_amount
                         ) {
 
@@ -1339,8 +1428,11 @@ const allocateAdvancePayment =
                                     Number(
                                         allocation.amount
                                     ) +
-                                    allocationAmount
+                                    invoiceAllocationAmount
                                 );
+
+                            allocation.currency = invoiceCurrency;
+                            allocation.exchange_rate = invoiceExchangeRate;
 
                         }
 
@@ -1356,7 +1448,13 @@ const allocateAdvancePayment =
                                         invoiceDoc._id,
 
                                     amount:
-                                        allocationAmount
+                                        invoiceAllocationAmount,
+
+                                    currency:
+                                        invoiceCurrency,
+
+                                    exchange_rate:
+                                        invoiceExchangeRate
 
                                 });
 
@@ -1377,7 +1475,7 @@ const allocateAdvancePayment =
                                 Number(
                                     payment.remaining_amount
                                 ) -
-                                allocationAmount
+                                    invoiceAllocationAmount
                             );
 
 

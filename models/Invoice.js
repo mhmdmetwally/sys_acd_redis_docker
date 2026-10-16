@@ -148,6 +148,13 @@ const InvoiceSchema =
                 required: true
             },
 
+            currency: {
+                type: String,
+                uppercase: true,
+                match: /^[A-Z]{3}$/,
+                default: process.env.DEFAULT_CURRENCY || 'EGP'
+            },
+
 
             // =========================================
             // Family

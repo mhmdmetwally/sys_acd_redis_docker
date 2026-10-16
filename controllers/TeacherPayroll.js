@@ -6,6 +6,9 @@ const AsyncWrapper =
 const TeacherPayroll =
     require('../models/TeacherPayroll');
 
+const Academy =
+    require('../models/Academy');
+
 const TeacherAssignment = 
     require('../models/TeacherAssignment');
 
@@ -379,10 +382,15 @@ const generatePayroll =
 
             try {
 
+                const academy = await Academy.findById(academy_id).select('currency');
+                const currency = academy?.currency || process.env.DEFAULT_CURRENCY || 'EGP';
+
                 const payroll =
                     await TeacherPayroll.create({
 
                         academy_id,
+
+                        currency,
 
                         teacher_assignment:
                             teacherAssignment._id,
@@ -1390,6 +1398,18 @@ const payPayroll =
 
                                 amount:
                                     roundedPaymentAmount,
+
+                                currency:
+                                    payroll.currency,
+
+                                base_amount:
+                                    roundedPaymentAmount,
+
+                                base_currency:
+                                    payroll.currency,
+
+                                exchange_rate:
+                                    1,
 
                                 expense_date:
                                     new Date(),

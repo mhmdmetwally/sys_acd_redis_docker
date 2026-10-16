@@ -1,0 +1,52 @@
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      MONGO_URL: mongodb://mongo:27017/academy?replicaSet=rs0
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-local-development-secret}
+      salt_round: ${salt_round:-10}
+      DEFAULT_CURRENCY: ${DEFAULT_CURRENCY:-EGP}
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:8
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mongo-init:
+    image: mongo:8
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - mongosh
+      - mongodb://mongo:27017/academy
+      - --quiet
+      - --eval
+      - "try { rs.status().ok } catch (error) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}) }; while (!db.hello().isWritablePrimary) { sleep(1000) }"
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mongo_data:

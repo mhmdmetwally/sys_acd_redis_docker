@@ -19,6 +19,19 @@ const PaymentAllocationSchema =
                 type: Number,
                 required: true,
                 min: 0.01
+            },
+
+            currency: {
+                type: String,
+                uppercase: true,
+                match: /^[A-Z]{3}$/,
+                default: process.env.DEFAULT_CURRENCY || 'EGP'
+            },
+
+            exchange_rate: {
+                type: Number,
+                min: 0,
+                default: 1
             }
         },
 

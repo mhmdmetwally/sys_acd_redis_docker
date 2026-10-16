@@ -31,6 +31,9 @@ const BlacklistedToken =
 const bcrypt =
     require('bcrypt');
 
+const { normalizeCurrency } =
+    require('../utils/Currency');
+
 const salt_round =
     Number(process.env.salt_round);
 
@@ -48,7 +51,8 @@ const register = AsyncWrapper(
             manager_phone,
             manager_name,
             academy_code,
-            password
+            password,
+            currency
         } = req.body;
 
 
@@ -69,6 +73,14 @@ const register = AsyncWrapper(
                 http_status_text.FAIL
             );
 
+            return next(error);
+        }
+
+        let academyCurrency;
+
+        try {
+            academyCurrency = normalizeCurrency(currency);
+        } catch (error) {
             return next(error);
         }
 
@@ -132,6 +144,9 @@ const register = AsyncWrapper(
                 manager_name,
 
                 academy_code,
+
+                currency:
+                    academyCurrency,
 
                 password:
                     hashed_password,

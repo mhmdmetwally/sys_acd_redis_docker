@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const AsyncWrapper = require('../middleware/AsyncWrapper');
 const Invoice = require('../models/Invoice');
+const Academy = require('../models/Academy');
 const Family = require('../models/Family');
 const FamilyDiscount = require('../models/FamilyDiscount');
 const StudentAssignment = require('../models/StudentAssignment');
@@ -18,6 +19,8 @@ const {
     getAcademyId,
     getStudentAssignmentForUser
 } = require('../utils/AccessScope');
+
+const { normalizeCurrency } = require('../utils/Currency');
 
 
 // =====================================================
@@ -230,6 +233,8 @@ const createInvoice = AsyncWrapper(
     async (req, res, next) => {
 
         const academy_id = getAcademyId(req);
+        const academy = await Academy.findById(academy_id).select('currency');
+        const currency = normalizeCurrency(academy?.currency);
 
         const {
             family,
@@ -419,6 +424,7 @@ const createInvoice = AsyncWrapper(
 
         const invoice = await Invoice.create({
             academy_id,
+            currency,
             family,
             items: invoiceItems,
             subtotal_amount: subtotalAmount,

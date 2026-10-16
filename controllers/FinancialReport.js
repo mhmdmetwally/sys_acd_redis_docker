@@ -2,6 +2,8 @@ const AsyncWrapper = require('../middleware/AsyncWrapper');
 const app_error = require('../utils/AppError');
 const http_status_text = require('../utils/HttpStatusText');
 const { getAcademyId } = require('../utils/AccessScope');
+const Academy = require('../models/Academy');
+const { normalizeCurrency } = require('../utils/Currency');
 
 const {
     getReportPeriod,
@@ -19,6 +21,16 @@ const getFinancialReport = AsyncWrapper(async (req, res, next) => {
         return next(error);
     }
 
+    const academy = await Academy.findById(academy_id).select('currency');
+    const defaultCurrency = normalizeCurrency(academy?.currency);
+    let displayCurrency;
+
+    try {
+        displayCurrency = normalizeCurrency(req.query.currency, defaultCurrency);
+    } catch (error) {
+        return next(error);
+    }
+
     // Period
     const period = getReportPeriod(req.query);
     if (period.error) {
@@ -31,8 +43,20 @@ const getFinancialReport = AsyncWrapper(async (req, res, next) => {
     const previousPeriod = getPreviousPeriod(start, end);
 
     // Current & Previous Financial Data
-    const current = await getFinancialData(academy_id, start, end);
-    const previous = await getFinancialData(academy_id, previousPeriod.start, previousPeriod.end);
+    const current = await getFinancialData(
+        academy_id,
+        start,
+        end,
+        displayCurrency,
+        defaultCurrency
+    );
+    const previous = await getFinancialData(
+        academy_id,
+        previousPeriod.start,
+        previousPeriod.end,
+        displayCurrency,
+        defaultCurrency
+    );
 
     // Growth Percentage Calculations
     const revenueGrowth = calculateGrowth(current.revenue, previous.revenue);
@@ -43,6 +67,7 @@ const getFinancialReport = AsyncWrapper(async (req, res, next) => {
     return res.status(200).json({
         status: http_status_text.SUCCESS,
         data: {
+            currency: displayCurrency,
             period: {
                 from: start,
                 to: end

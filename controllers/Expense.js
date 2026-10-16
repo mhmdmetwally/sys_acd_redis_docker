@@ -4,6 +4,9 @@ const AsyncWrapper =
 const Expense =
     require('../models/Expense');
 
+const Academy =
+    require('../models/Academy');
+
 const app_error =
     require('../utils/AppError');
 
@@ -13,6 +16,11 @@ const http_status_text =
 const {
     getAcademyId
 } = require('../utils/AccessScope');
+
+const {
+    normalizeCurrency,
+    getExchangeRate
+} = require('../utils/Currency');
 
 
 // =====================================================
@@ -31,6 +39,7 @@ const createExpense = AsyncWrapper(
             category,
             title,
             amount,
+            currency,
             expense_date,
             payment_method,
             reference,
@@ -67,7 +76,7 @@ const createExpense = AsyncWrapper(
 
 
         if (
-            Number.isNaN(expenseAmount) ||
+            !Number.isFinite(expenseAmount) ||
             expenseAmount <= 0
         ) {
 
@@ -82,6 +91,19 @@ const createExpense = AsyncWrapper(
 
             return next(error);
         }
+
+        const academy = await Academy.findById(academy_id).select('currency');
+        const baseCurrency = normalizeCurrency(academy?.currency);
+        let expenseCurrency;
+
+        try {
+            expenseCurrency = normalizeCurrency(currency, baseCurrency);
+        } catch (error) {
+            return next(error);
+        }
+
+        const exchangeRate = await getExchangeRate(expenseCurrency, baseCurrency);
+        const baseAmount = Number((expenseAmount * exchangeRate).toFixed(2));
 
 
         // =============================================
@@ -99,6 +121,18 @@ const createExpense = AsyncWrapper(
 
                 amount:
                     expenseAmount,
+
+                currency:
+                    expenseCurrency,
+
+                base_amount:
+                    baseAmount,
+
+                base_currency:
+                    baseCurrency,
+
+                exchange_rate:
+                    exchangeRate,
 
                 expense_date:
                     expense_date ||
